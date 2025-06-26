@@ -1,223 +1,102 @@
 import streamlit as st
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-import time
 
 # Page configuration
-st.set_page_config(
-    page_title="Mental Health Support Chatbot",
-    page_icon="🧠",
-    layout="wide"
-)
+st.set_page_config(page_title="Mental Health Support Bot", page_icon="💙", layout="centered")
 
-# Title and description
-st.title("🧠 Mental Health Support Chatbot")
-st.markdown("*Empathetic AI companion for mental health support*")
+# --- Custom CSS Styling ---
+st.markdown("""
+    <style>
+    body {
+        background-color: #f0f8ff;
+    }
+    .main {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 30px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+    .stTextInput > div > div > input {
+        background-color: #f9f9f9;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #d3d3d3;
+    }
+    .stMarkdown {
+        font-size: 16px;
+        line-height: 1.6;
+    }
+    footer {
+        visibility: hidden;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Sidebar for model path and settings
-with st.sidebar:
-    st.header("📁 Model Configuration")
-    model_path = st.text_input(
-        "Model Path/Name:", 
-        value="./empathetic-chatbot-model",
-        help="Enter the path to your fine-tuned model folder"
-    )
-    
-    # Common model suggestions
-    st.markdown("**Common paths:**")
-    if st.button("📂 ./my-model"):
-        st.session_state.model_path = "./my-model"
-    if st.button("📂 ./fine-tuned-model"):
-        st.session_state.model_path = "./fine-tuned-model"
-    if st.button("🤗 microsoft/DialoGPT-medium"):
-        st.session_state.model_path = "microsoft/DialoGPT-medium"
-    
-    if 'model_path' in st.session_state:
-        model_path = st.session_state.model_path
-    
-    st.markdown("---")
-    st.header("⚙️ Generation Settings")
-    max_length = st.slider("Response Length", 50, 300, 128)
-    temperature = st.slider("Creativity", 0.1, 2.0, 0.7, 0.1)
-    do_sample = st.checkbox("Enable Sampling", True)
+# App title and description
+st.markdown("<h1 style='text-align: center; color: #004080;'>💙 Mental Health Support Bot</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>This chatbot provides a safe, caring space to talk about how you feel. 💬</p>", unsafe_allow_html=True)
 
-# Load model with caching
+# Load model and tokenizer
 @st.cache_resource
-def load_model(model_path):
+def load_model():
+    model_path = "/workspaces/AI-Ml/empathetic-chatbot-model"
     try:
-        with st.spinner("Loading model... Please wait"):
-            model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto" if torch.cuda.is_available() else None,
-                local_files_only=True  # Only use local files
-            )
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_path,
-                local_files_only=True
-            )
-            
-            # Set pad token if not present
-            if tokenizer.pad_token is None:
-                tokenizer.pad_token = tokenizer.eos_token
-                
-            return model, tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        return model, tokenizer
     except Exception as e:
-        st.error(f"Error loading model: {str(e)}")
+        st.error(f"Error loading model: {e}")
         return None, None
 
-# Initialize session state for chat history
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
+model, tokenizer = load_model()
 
-# Load model
-if model_path:
-    model, tokenizer = load_model(model_path)
-else:
-    st.warning("Please enter a valid model path in the sidebar.")
+if model is None:
     st.stop()
 
-if model is None or tokenizer is None:
-    st.error(f"❌ Failed to load the model from: `{model_path}`")
-    st.markdown("**Please check:**")
-    st.markdown("1. Model folder exists at the specified path")
-    st.markdown("2. Folder contains `config.json`, `pytorch_model.bin`, and `tokenizer.json`")
-    st.markdown("3. Path is correct (use forward slashes)")
-    
-    with st.expander("📋 Example folder structure"):
-        st.code("""
-your-project/
-├── app.py
-└── empathetic-chatbot-model/
-    ├── config.json
-    ├── pytorch_model.bin
-    ├── tokenizer.json
-    ├── tokenizer_config.json
-    └── vocab.txt
-        """)
-    st.stop()
+# User input box
+st.markdown("### How are you feeling today?")
+user_input = st.text_input("You:", placeholder="Type here...", key="user_input")
 
-# Chat interface
-col1, col2 = st.columns([3, 1])
+# Detect sensitive emotional terms
+sensitive_keywords = ["depressed", "anxious", "suicidal", "hopeless", "worthless", "tired", "lonely", "lost", "scared", "broken"]
 
-with col1:
-    user_input = st.text_input("Share your thoughts:", placeholder="How are you feeling today?", key="user_input")
+if user_input:
+    # Handle sensitive input
+    if any(word in user_input.lower() for word in sensitive_keywords):
+        st.markdown("<div style='background-color:#ffe6e6;padding:15px;border-radius:10px;'>"
+                    "<strong>Bot:</strong> I'm really sorry you're feeling this way. 💙 You're not alone. "
+                    "Please consider talking to someone you trust or reaching out to a mental health professional. You matter."
+                    "</div>", unsafe_allow_html=True)
+    else:
+        # Empathetic chatbot prompt
+        prompt = f"""You are a kind and empathetic mental health support assistant. You always listen carefully and respond with warmth, encouragement, and understanding.
 
-with col2:
-    clear_chat = st.button("🗑️ Clear Chat", type="secondary")
+Human: {user_input}
+Bot:"""
 
-if clear_chat:
-    st.session_state.chat_history = []
-    st.rerun()
+        inputs = tokenizer.encode(prompt, return_tensors="pt")
 
-# Generate response
-if user_input and user_input.strip():
-    try:
         with st.spinner("Thinking..."):
-            # Prepare input text
-            input_text = f"Person: {user_input.strip()}\nBot:"
-            
-            # Tokenize input
-            inputs = tokenizer.encode(
-                input_text, 
-                return_tensors="pt", 
-                padding=True, 
-                truncation=True,
-                max_length=512
-            )
-            
-            # Move to GPU if available
-            if torch.cuda.is_available():
-                inputs = inputs.cuda()
-            
-            # Generate response
             with torch.no_grad():
                 outputs = model.generate(
                     inputs,
-                    max_length=len(inputs[0]) + max_length,
-                    temperature=temperature,
-                    do_sample=do_sample,
-                    pad_token_id=tokenizer.pad_token_id,
-                    eos_token_id=tokenizer.eos_token_id,
-                    repetition_penalty=1.1,
-                    no_repeat_ngram_size=3
+                    max_new_tokens=150,
+                    temperature=0.8,
+                    do_sample=True,
+                    pad_token_id=tokenizer.eos_token_id
                 )
-            
-            # Decode response
-            full_response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-            bot_response = full_response.split("Bot:")[-1].strip()
-            
-            # Clean up response
-            if not bot_response:
-                bot_response = "I understand you're reaching out. Could you tell me more about how you're feeling?"
-            
-            # Add to chat history
-            st.session_state.chat_history.append({
-                "user": user_input.strip(),
-                "bot": bot_response,
-                "timestamp": time.strftime("%H:%M")
-            })
-            
-    except Exception as e:
-        st.error(f"Error generating response: {str(e)}")
-        bot_response = "I apologize, but I'm having trouble responding right now. Please try again."
-        st.session_state.chat_history.append({
-            "user": user_input.strip(),
-            "bot": bot_response,
-            "timestamp": time.strftime("%H:%M")
-        })
 
-# Display chat history
-if st.session_state.chat_history:
-    st.markdown("---")
-    st.subheader("💬 Conversation History")
-    
-    for i, chat in enumerate(reversed(st.session_state.chat_history[-10:])):  # Show last 10 messages
-        # User message
-        with st.container():
-            col1, col2, col3 = st.columns([1, 6, 1])
-            with col2:
-                st.markdown(f"""
-                <div style="background-color: #e1f5fe; padding: 10px; border-radius: 10px; margin: 5px 0;">
-                    <strong>You ({chat['timestamp']}):</strong><br>
-                    {chat['user']}
-                </div>
-                """, unsafe_allow_html=True)
-        
-        # Bot response
-        with st.container():
-            col1, col2, col3 = st.columns([1, 6, 1])
-            with col2:
-                st.markdown(f"""
-                <div style="background-color: #f3e5f5; padding: 10px; border-radius: 10px; margin: 5px 0;">
-                    <strong>🧠 SupportBot ({chat['timestamp']}):</strong><br>
-                    {chat['bot']}
-                </div>
-                """, unsafe_allow_html=True)
-        
-        if i < len(st.session_state.chat_history) - 1:
-            st.markdown("<br>", unsafe_allow_html=True)
+            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            bot_reply = response.split("Bot:")[-1].strip()
 
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; font-size: 0.8em;">
-    ⚠️ This is an AI chatbot for support purposes only. For serious mental health concerns, please consult a professional.
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(f"<div style='background-color:#e6f2ff;padding:15px;border-radius:10px;'>"
+                    f"<strong>Bot:</strong> {bot_reply}</div>", unsafe_allow_html=True)
 
-# Model info
-with st.expander("ℹ️ Model Information"):
-    st.write(f"**Model Path:** {model_path}")
-    st.write(f"**Device:** {'GPU' if torch.cuda.is_available() else 'CPU'}")
-    st.write(f"**PyTorch Version:** {torch.__version__}")
-    if torch.cuda.is_available():
-        st.write(f"**GPU:** {torch.cuda.get_device_name()}")
-    
-    # Model details if loaded successfully
-    if model is not None:
-        try:
-            st.write(f"**Model Parameters:** {sum(p.numel() for p in model.parameters()):,}")
-            st.write(f"**Vocab Size:** {len(tokenizer)}")
-        except:
-            pass
+#  Footer
+st.markdown("<br><hr style='border-top: 1px solid #ccc;'>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>This is not a substitute for professional help. If you are in crisis, please seek immediate assistance. 💙</p>", unsafe_allow_html=True)
